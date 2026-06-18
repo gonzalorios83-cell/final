@@ -1,0 +1,378 @@
+const groups = {
+  favorites: [
+    app('Google','https://www.google.com/','google.com'),
+    app('YouTube','https://www.youtube.com/','youtube.com'),
+    app('Gmail','https://mail.google.com/','gmail.com', false, '', 'https://ssl.gstatic.com/ui/v1/icons/mail/rfr/gmail.ico'),
+    app('Hotmail','https://outlook.live.com/mail/','outlook.live.com'),
+    app('WhatsApp Web','https://web.whatsapp.com/','whatsapp.com'),
+    app('Instagram','https://www.instagram.com/','instagram.com'),
+    app('TikTok','https://www.tiktok.com/','tiktok.com', true),
+    app('Facebook','https://www.facebook.com/','facebook.com'),
+    app('Maps','https://www.google.com/maps','maps.google.com'),
+    app('Traductor','https://translate.google.com/','translate.google.com'),
+    app('Clima','https://www.google.com/search?q=clima+buenos+aires','weather.com'),
+    app('X.com','https://x.com/','x.com', true),
+    app('Calendario','https://calendar.google.com/','calendar.google.com', false, '', 'https://ssl.gstatic.com/calendar/images/favicon_v2014_32.ico'),
+    app('Calculadora','https://www.google.com/search?q=calculadora','calculator.net', true)
+  ],
+  content: [
+    app('Mercado Libre','https://www.mercadolibre.com.ar/','mercadolibre.com.ar'),
+    app('Mercado Pago','https://www.mercadopago.com.ar/','mercadopago.com.ar'),
+    app('Amazon','https://www.amazon.com/','amazon.com', true),
+    app('Wikipedia','https://es.wikipedia.org/','wikipedia.org'),
+    app('Netflix','https://www.netflix.com/','netflix.com', true),
+    app('Spotify','https://open.spotify.com/','spotify.com', true),
+    app('Flow','https://www.flow.com.ar/','flow.com.ar', true),
+    app('Bloc de notas','#notes','', true, '▤')
+  ],
+  ai: [
+    app('Gemini','https://gemini.google.com/','gemini.google.com'),
+    app('ChatGPT','https://chatgpt.com/','chatgpt.com'),
+    app('Claude','https://claude.ai/','claude.ai'),
+    app('Microsoft 365','https://www.office.com/','office.com'),
+    app('Drive','https://drive.google.com/','drive.google.com'),
+    app('Aerolíneas Argentinas','https://www.aerolineas.com.ar/','aerolineas.com.ar'),
+    app('Ualá','https://www.uala.com.ar/','uala.com.ar'),
+    app('Despegar','https://www.despegar.com.ar/','despegar.com.ar')
+  ],
+  tramites: [
+    app('ARCA','https://www.arca.gob.ar/','arca.gob.ar', true, 'ARCA'),
+    app('Mi Argentina','https://www.argentina.gob.ar/miargentina','argentina.gob.ar'),
+    app('ANSES','https://www.anses.gob.ar/','anses.gob.ar', true, 'ANSES'),
+    app('Monotributo','https://monotributo.afip.gob.ar/','afip.gob.ar', false, 'M')
+  ],
+  noticias: [
+    app('Clarín','https://www.clarin.com/','clarin.com'),
+    app('Infobae','https://www.infobae.com/','infobae.com'),
+    app('La Nación','https://www.lanacion.com.ar/','lanacion.com.ar'),
+    app('Telefé','https://mitelefe.com/','telefe.com'),
+    app('El Cronista','https://www.cronista.com/','cronista.com'),
+    app('TyC Sports','https://www.tycsports.com/','tycsports.com')
+  ],
+  bancos: [
+    app('Nación','https://www.bna.com.ar/','bna.com.ar'),
+    app('Provincia','https://www.bancoprovincia.com.ar/','bancoprovincia.com.ar'),
+    app('Macro','https://www.macro.com.ar/','macro.com.ar'),
+    app('Santander','https://www.santander.com.ar/','santander.com.ar'),
+    app('Banco Ciudad','https://www.bancociudad.com.ar/','bancociudad.com.ar'),
+    app('BBVA','https://www.bbva.com.ar/','bbva.com.ar'),
+    app('Brubank','https://www.brubank.com/','brubank.com'),
+    app('Ualá','https://www.uala.com.ar/','uala.com.ar')
+  ],
+  negocio: [
+    app('Muebles','https://www.google.com/search?q=muebles+mayorista+argentina','google.com', true, '▰'),
+    app('Papelera','https://www.google.com/search?q=papelera+mayorista+argentina','google.com', true, '⌘'),
+    app('Contadoras de Billetes','https://www.google.com/search?q=contadoras+de+billetes','google.com', true, '▣'),
+    app('Tecnología','https://www.puntosmart.com.ar/','puntosmart.com.ar', true, '▦')
+  ]
+};
+
+const folderNames = {
+  tramites:'Trámites', noticias:'Noticias y Deportes', bancos:'Bancos', negocio:'Negocio / Proveedores'
+};
+let editMode = false;
+let currentCustomIndex = null;
+
+function app(name,url,domain,dark=false,fallback='',icon=''){
+  return { id: slug(name), name, url, domain, dark, fallback, icon };
+}
+function slug(s){ return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''); }
+function favicon(domain){ return domain ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128` : ''; }
+function normalizeUrl(url){
+  if(!url) return '#';
+  if(url.startsWith('#')) return url;
+  if(!/^https?:\/\//i.test(url)) return 'https://' + url;
+  return url;
+}
+function openSmartUrl(url){
+  const finalUrl = normalizeUrl(url);
+  try{
+    const opened = window.open(finalUrl,'_blank','noopener');
+    if(!opened) window.location.href = finalUrl;
+  }catch(e){
+    window.location.href = finalUrl;
+  }
+}
+function cleanText(str){
+  return (str || '').toString().trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+}
+
+function tileHTML(item, opts={}){
+  const img = item.icon || favicon(item.domain);
+  const fallback = item.fallback || (item.name || '?').slice(0,2).toUpperCase();
+  const dark = item.dark ? ' dark' : '';
+  const draggable = opts.draggable && editMode ? 'draggable="true"' : '';
+  return `<button class="tile ${editMode ? 'editing' : ''}" data-id="${item.id}" data-url="${item.url}" ${draggable} title="${item.name}">
+    <span class="tile-icon${dark}">${img ? `<img src="${img}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'letter',textContent:'${fallback.replace(/'/g,'')}'}))">` : `<span class="letter">${fallback}</span>`}</span>
+    <span class="tile-name">${item.name}</span>
+  </button>`;
+}
+
+function renderGroup(key, elId, mini=false){
+  const el = document.getElementById(elId);
+  if(!el) return;
+  const items = groups[key];
+  el.innerHTML = items.map(i => tileHTML(i,{draggable: !mini})).join('');
+}
+
+function renderAll(){
+  renderGroup('favorites','favoritesGrid');
+  renderGroup('content','contentGrid');
+  renderGroup('ai','aiGrid');
+  renderGroup('tramites','tramitesGrid');
+  renderGroup('noticias','noticiasGrid');
+  renderGroup('bancos','bancosGrid');
+  renderGroup('negocio','negocioGrid');
+  renderCustom();
+  bindTiles();
+  bindDrag();
+  document.body.classList.toggle('editing-mode', editMode);
+  document.getElementById('editBtn').textContent = editMode ? '✓ Listo' : '✎ Editar';
+}
+
+function getCustom(){
+  try{return JSON.parse(localStorage.getItem('ps_custom_tiles')||'[]')}catch(e){return []}
+}
+function setCustom(arr){localStorage.setItem('ps_custom_tiles',JSON.stringify(arr));}
+function renderCustom(){
+  const data = getCustom();
+  const grid = document.getElementById('customGrid');
+  grid.innerHTML = '';
+  for(let i=0;i<5;i++){
+    const item = data[i];
+    const btn = document.createElement('button');
+    btn.className = 'custom-tile' + (item ? ' filled' : '');
+    btn.dataset.index = i;
+    if(item){
+      const img = item.icon || favicon(domainFromUrl(item.url));
+      const letter = (item.name || '?').slice(0,2).toUpperCase();
+      btn.innerHTML = `<span class="tile-icon"><img src="${img}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'letter',textContent:'${letter}'}))"></span><span>${item.name}</span>`;
+    }else{
+      btn.innerHTML = `<span class="plus">+</span><span>Agregar<br>acceso</span>`;
+    }
+    grid.appendChild(btn);
+  }
+}
+function domainFromUrl(url){
+  try{return new URL(normalizeUrl(url)).hostname.replace(/^www\./,'')}catch(e){return ''}
+}
+
+function bindTiles(){
+  document.querySelectorAll('.tile').forEach(btn => {
+    btn.onclick = () => {
+      const url = btn.dataset.url;
+      if(editMode) return;
+      if(url === '#notes') return openNotes();
+      openSmartUrl(url);
+    };
+  });
+  document.querySelectorAll('.custom-tile').forEach(btn => {
+    btn.onclick = () => {
+      const idx = Number(btn.dataset.index);
+      const item = getCustom()[idx];
+      if(item && !editMode){ openSmartUrl(item.url); return; }
+      openCustom(idx);
+    };
+  });
+}
+function openNotes(){
+  alert('Bloc de notas: en la próxima versión se puede agregar un bloc editable guardado en el navegador.');
+}
+
+function openCustom(index){
+  currentCustomIndex = index;
+  const arr = getCustom();
+  const item = arr[index] || {};
+  customName.value = item.name || '';
+  customUrl.value = item.url || '';
+  customIcon.value = item.icon || '';
+  deleteCustomBtn.style.visibility = item.name ? 'visible':'hidden';
+  customDialog.showModal();
+}
+
+customForm.addEventListener('submit', e => {
+  e.preventDefault();
+  const arr = getCustom();
+  arr[currentCustomIndex] = { name: customName.value.trim(), url: normalizeUrl(customUrl.value.trim()), icon: customIcon.value.trim() };
+  setCustom(arr);
+  customDialog.close();
+  renderAll();
+});
+cancelCustomBtn.onclick = () => customDialog.close();
+deleteCustomBtn.onclick = () => {
+  const arr = getCustom();
+  arr.splice(currentCustomIndex,1);
+  setCustom(arr);
+  customDialog.close();
+  renderAll();
+};
+
+function bindDrag(){
+  document.querySelectorAll('.tile[draggable="true"]').forEach(tile => {
+    tile.addEventListener('dragstart', e => e.dataTransfer.setData('text/plain', tile.dataset.id));
+    tile.addEventListener('dragover', e => { e.preventDefault(); tile.classList.add('drag-over'); });
+    tile.addEventListener('dragleave', () => tile.classList.remove('drag-over'));
+    tile.addEventListener('drop', e => {
+      e.preventDefault(); tile.classList.remove('drag-over');
+      const fromId = e.dataTransfer.getData('text/plain');
+      const toId = tile.dataset.id;
+      swapItems(fromId,toId);
+    });
+  });
+}
+function swapItems(fromId,toId){
+  let aK,aI,bK,bI;
+  for(const [k,arr] of Object.entries(groups)){
+    arr.forEach((it,i)=>{ if(it.id===fromId){aK=k;aI=i} if(it.id===toId){bK=k;bI=i} });
+  }
+  if(aK && bK){
+    const temp = groups[aK][aI]; groups[aK][aI] = groups[bK][bI]; groups[bK][bI] = temp; renderAll();
+  }
+}
+
+editBtn.onclick = () => { editMode = !editMode; renderAll(); };
+resetBtn.onclick = () => {
+  if(confirm('¿Restaurar accesos personalizados y recargar la maqueta?')){ localStorage.removeItem('ps_custom_tiles'); location.reload(); }
+};
+howBtn.onclick = () => infoDialog.showModal();
+closeInfoBtn.onclick = () => infoDialog.close();
+supportBtn.onclick = () => openSmartUrl('https://wa.me/5491148706501?text=Hola%2C%20necesito%20soporte%20con%20Punto%20Smart%20OS');
+suggestBtn.onclick = () => openSmartUrl('https://wa.me/5491148706501?text=Hola%2C%20quiero%20sugerir%20un%20acceso%20para%20Punto%20Smart%20OS');
+
+Object.keys(folderNames).forEach(key => {
+  document.querySelector(`[data-folder="${key}"] .folder-open`)?.addEventListener('click', () => openFolder(key));
+});
+function openFolder(key){
+  folderTitle.textContent = folderNames[key];
+  folderModalGrid.innerHTML = groups[key].map(i => tileHTML(i)).join('');
+  folderDialog.showModal();
+  bindTiles();
+}
+closeFolderBtn.onclick = () => folderDialog.close();
+
+let smartSearchEngine = 'google';
+const smartSearchDefaults = {
+  google:'https://www.google.com/',
+  chatgpt:'https://chatgpt.com/',
+  videos:'https://www.youtube.com/',
+  comprar:'https://www.mercadolibre.com.ar/',
+  comparar:'https://www.google.com/search?q=comparar+productos',
+  futbol:'https://www.google.com/search?q=futbol+partidos+de+hoy',
+  dolar:'https://dolarhoy.com/',
+  clima:'https://www.google.com/search?q=clima+buenos+aires',
+  tramites:'https://www.argentina.gob.ar/',
+  noticias:'https://news.google.com/topstories?hl=es-419&gl=AR&ceid=AR:es-419',
+  cerca:'https://www.google.com/maps',
+  precios:'https://www.google.com/search?q=precios+argentina',
+  proveedores:'https://www.google.com/search?q=proveedores+mayoristas+argentina',
+  servicios:'https://www.google.com/search?q=pagar+servicios+argentina',
+  gobierno:'https://www.argentina.gob.ar/',
+  soporte:'https://www.google.com/search?q=soporte+tecnico',
+  manuales:'https://www.google.com/search?q=manuales+pdf',
+  imagenes:'https://www.google.com/imghp?hl=es',
+  trabajo:'https://mail.google.com/',
+  redes:'https://www.google.com/search?q=redes+sociales',
+  musica:'https://open.spotify.com/',
+  aprender:'https://www.youtube.com/results?search_query=tutoriales',
+  vender:'https://www.google.com/search?q=vender+online+argentina',
+  clientes:'https://contacts.google.com/',
+  pagos:'https://www.mercadopago.com.ar/',
+  seguridad:'https://www.google.com/search?q=seguridad+digital'
+};
+const smartSearchPlaceholders = {
+  google:'Buscar en la web...',
+  chatgpt:'Preguntarle a la IA...',
+  videos:'Buscar videos, tutoriales o reviews...',
+  comprar:'Buscar para comprar...',
+  comparar:'Comparar modelos, precios o alternativas...',
+  futbol:'Buscar fútbol, partidos, resultados o tabla...',
+  dolar:'Buscar dólar, cotizaciones o economía...',
+  clima:'Buscar clima por ciudad o zona...',
+  tramites:'Buscar trámites argentinos...',
+  noticias:'Buscar noticias...',
+  cerca:'Buscar algo cerca de mí...',
+  precios:'Buscar precios en Argentina...',
+  proveedores:'Buscar proveedores o mayoristas...',
+  servicios:'Buscar servicios, pagos o empresas...',
+  gobierno:'Buscar sitios del Estado...',
+  soporte:'Buscar solución técnica...',
+  manuales:'Buscar manuales, drivers o PDF...',
+  imagenes:'Buscar imágenes o referencias visuales...',
+  trabajo:'Buscar en herramientas de trabajo...',
+  redes:'Buscar en redes sociales...',
+  musica:'Buscar música...',
+  aprender:'Buscar tutoriales, cursos o explicaciones...',
+  vender:'Buscar dónde o cómo vender...',
+  clientes:'Buscar clientes o contactos...',
+  pagos:'Buscar pagos, billeteras o bancos...',
+  seguridad:'Buscar seguridad, cuentas o recuperación...',
+  local:'Buscar dentro de tu entorno...'
+};
+function buildSmartSearchUrl(engine, query){
+  const q = (query || '').trim();
+  if(!q) return smartSearchDefaults[engine] || smartSearchDefaults.google;
+  const e = encodeURIComponent(q);
+  const dash = e.replace(/%20/g,'-');
+  if(engine === 'videos') return `https://www.youtube.com/results?search_query=${e}`;
+  if(engine === 'comprar') return `https://listado.mercadolibre.com.ar/${dash}`;
+  if(engine === 'comparar') return `https://www.google.com/search?q=${encodeURIComponent('comparar ' + q + ' precio características opiniones')}`;
+  if(engine === 'futbol') return `https://www.google.com/search?q=${encodeURIComponent(q + ' futbol partidos resultados fixture tabla')}`;
+  if(engine === 'dolar') return `https://www.google.com/search?q=${encodeURIComponent('dolar hoy ' + q)}`;
+  if(engine === 'clima') return `https://www.google.com/search?q=${encodeURIComponent('clima ' + q)}`;
+  if(engine === 'tramites') return `https://www.google.com/search?q=${encodeURIComponent(q + ' site:argentina.gob.ar OR site:arca.gob.ar OR site:anses.gob.ar OR site:buenosaires.gob.ar')}`;
+  if(engine === 'noticias') return `https://news.google.com/search?q=${e}&hl=es-419&gl=AR&ceid=AR:es-419`;
+  if(engine === 'cerca') return `https://www.google.com/maps/search/${encodeURIComponent(q + ' cerca de mi')}`;
+  if(engine === 'precios') return `https://www.google.com/search?q=${encodeURIComponent('precio ' + q + ' argentina')}`;
+  if(engine === 'proveedores') return `https://www.google.com/search?q=${encodeURIComponent('proveedor mayorista ' + q + ' argentina')}`;
+  if(engine === 'servicios') return `https://www.google.com/search?q=${encodeURIComponent(q + ' pagar servicio argentina')}`;
+  if(engine === 'gobierno') return `https://www.google.com/search?q=${encodeURIComponent(q + ' site:argentina.gob.ar OR site:gob.ar OR site:buenosaires.gob.ar')}`;
+  if(engine === 'soporte') return `https://www.google.com/search?q=${encodeURIComponent('solucion soporte error ' + q)}`;
+  if(engine === 'manuales') return `https://www.google.com/search?q=${encodeURIComponent('manual pdf driver ' + q)}`;
+  if(engine === 'imagenes') return `https://www.google.com/search?tbm=isch&q=${e}`;
+  if(engine === 'trabajo') return `https://mail.google.com/mail/u/0/#search/${e}`;
+  if(engine === 'redes') return `https://www.google.com/search?q=${encodeURIComponent(q + ' site:instagram.com OR site:tiktok.com OR site:facebook.com OR site:x.com OR site:linkedin.com')}`;
+  if(engine === 'musica') return `https://www.youtube.com/results?search_query=${encodeURIComponent(q + ' musica')}`;
+  if(engine === 'aprender') return `https://www.youtube.com/results?search_query=${encodeURIComponent('tutorial curso aprender ' + q)}`;
+  if(engine === 'vender') return `https://www.google.com/search?q=${encodeURIComponent('vender ' + q + ' online argentina mercadolibre instagram')}`;
+  if(engine === 'clientes') return `https://contacts.google.com/search/${e}`;
+  if(engine === 'pagos') return `https://www.google.com/search?q=${encodeURIComponent('pagar ' + q + ' mercadopago banco argentina')}`;
+  if(engine === 'seguridad') return `https://www.google.com/search?q=${encodeURIComponent('seguridad recuperar cuenta clave ' + q)}`;
+  if(engine === 'chatgpt') return `https://chatgpt.com/?q=${e}`;
+  return `https://www.google.com/search?q=${e}`;
+}
+function filterTiles(query){
+  const q = cleanText(query);
+  document.querySelectorAll('.tile,.custom-tile').forEach(el => {
+    const text = cleanText(el.textContent);
+    el.classList.toggle('hidden-search', !!q && !text.includes(q));
+  });
+}
+function setSmartSearchEngine(engine){
+  smartSearchEngine = engine || 'google';
+  document.querySelectorAll('.engine-pill').forEach(btn => btn.classList.toggle('active', btn.dataset.engine === smartSearchEngine));
+  const box = document.querySelector('.smart-search');
+  box?.classList.toggle('local-mode', smartSearchEngine === 'local');
+  if(searchInput) searchInput.placeholder = smartSearchPlaceholders[smartSearchEngine] || '¿Qué querés buscar?';
+}
+searchInput.addEventListener('input', e => filterTiles(e.target.value));
+document.querySelectorAll('.engine-pill').forEach(btn => {
+  btn.addEventListener('click', () => {
+    setSmartSearchEngine(btn.dataset.engine);
+    searchInput.focus();
+    if(btn.dataset.engine === 'local') filterTiles(searchInput.value);
+  });
+});
+smartSearchForm?.addEventListener('submit', e => {
+  e.preventDefault();
+  const q = searchInput.value.trim();
+  if(smartSearchEngine === 'local'){ filterTiles(q); return; }
+  openSmartUrl(buildSmartSearchUrl(smartSearchEngine, q));
+});
+setSmartSearchEngine('google');
+
+function tick(){
+  const now = new Date();
+  clock.textContent = now.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+  dateText.textContent = now.toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'}).replace(/^./,c=>c.toUpperCase());
+}
+setInterval(tick,1000); tick(); renderAll();
