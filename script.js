@@ -72,6 +72,42 @@ const folderNames = {
 };
 let editMode = false;
 let currentCustomIndex = null;
+let currentAddGroup = null;
+let dragState = null;
+const LS_GROUPS_STATE = 'ps_groups_state';
+
+function cleanGroupItem(item){
+  return {
+    id: item.id || slug(item.name || 'acceso'),
+    name: item.name || 'Acceso',
+    url: item.url || '#',
+    domain: item.domain || '',
+    dark: !!item.dark,
+    fallback: item.fallback || '',
+    icon: item.icon || ''
+  };
+}
+function saveGroupsState(){
+  try{
+    const out = {};
+    Object.keys(groups).forEach(k => out[k] = (groups[k] || []).map(cleanGroupItem));
+    localStorage.setItem(LS_GROUPS_STATE, JSON.stringify(out));
+    window.dispatchEvent(new CustomEvent('ps:groupsChanged'));
+  }catch(e){}
+}
+function restoreGroupsState(){
+  try{
+    const saved = JSON.parse(localStorage.getItem(LS_GROUPS_STATE) || 'null');
+    if(!saved) return;
+    Object.keys(saved).forEach(k => {
+      if(Array.isArray(saved[k]) && Array.isArray(groups[k])){
+        groups[k].length = 0;
+        saved[k].forEach(item => groups[k].push(cleanGroupItem(item)));
+      }
+    });
+  }catch(e){}
+}
+
 
 function app(name,url,domain,dark=false,fallback='',icon=''){
   return { id: slug(name), name, url, domain, dark, fallback, icon };
@@ -97,12 +133,49 @@ function cleanText(str){
   return (str || '').toString().trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
 }
 
+const dailyPhrases = [
+  'Disfrutá lo fugaz.',
+  'El éxito es levantarse cada vez que te caés.',
+  'Hoy será un gran día.',
+  '¿Sonreíste hoy?',
+  'Somos instantes.',
+  '¿Qué estás esperando para amar?',
+  'Lo imposible solo tarda un poco más.',
+  'Duermo poco, sueño mucho.',
+  'Con los ojos cerrados y los sueños despiertos.',
+  'Vivir intensamente es mi insomnio permanente.',
+  'Que nada te detenga.',
+  'Persigue tus sueños.',
+  'Más amor, por favor.',
+  'Lo esencial es invisible a los ojos.',
+  '¿Quién te dijo que todo está perdido?',
+  '¿Es hermoso saber que estás?',
+  'El tiempo es infinito a tu lado.',
+  'No pierdas el foco.',
+  '¿Cuánto perdemos por miedo a perder?',
+  'Más acción y menos reacción.',
+  'Qué placer verte sonreír.',
+  'Ordenás mi caos.'
+];
+
+function initDailyPhrase(){
+  const el = document.getElementById('dailyPhrase');
+  if(!el || !dailyPhrases.length) return;
+  const today = new Date();
+  const start = new Date(2026,5,19); // 19/06/2026: primera frase de la lista.
+  const d0 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const day = Math.max(0, Math.floor((d0 - start) / 86400000));
+  el.textContent = dailyPhrases[day % dailyPhrases.length];
+}
+
+
 function tileHTML(item, opts={}){
   const img = item.icon || favicon(item.domain);
   const fallback = item.fallback || (item.name || '?').slice(0,2).toUpperCase();
   const dark = item.dark ? ' dark' : '';
   const draggable = opts.draggable && editMode ? 'draggable="true"' : '';
-  return `<button class="tile ${editMode ? 'editing' : ''}" data-id="${item.id}" data-url="${item.url}" ${draggable} title="${item.name}">
+  const groupAttr = opts.group ? `data-group="${opts.group}" data-index="${opts.index || 0}"` : '';
+  return `<button class="tile ${editMode ? 'editing' : ''}" data-id="${item.id}" data-url="${item.url}" ${groupAttr} ${draggable} title="${item.name}">
     <span class="tile-icon${dark}">${img ? `<img src="${img}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'letter',textContent:'${fallback.replace(/'/g,'')}'}))">` : `<span class="letter">${fallback}</span>`}</span>
     <span class="tile-name">${item.name}</span>
   </button>`;
@@ -112,7 +185,12 @@ function renderGroup(key, elId, mini=false){
   const el = document.getElementById(elId);
   if(!el) return;
   const items = groups[key];
-  el.innerHTML = items.map(i => tileHTML(i,{draggable: !mini})).join('');
+  el.dataset.group = key;
+  const addTile = editMode ? `<button type="button" class="tile add-section-tile" data-add-group="${key}" title="Agregar acceso">
+    <span class="tile-icon add-icon">+</span>
+    <span class="tile-name">Agregar acceso</span>
+  </button>` : '';
+  el.innerHTML = items.map((i,idx) => tileHTML(i,{draggable: true, group:key, index:idx})).join('') + addTile;
 }
 
 function renderAll(){
@@ -158,16 +236,34 @@ function domainFromUrl(url){
 }
 
 function bindTiles(){
-  document.querySelectorAll('.tile').forEach(btn => {
-    btn.onclick = () => {
+  document.querySelectorAll('.add-section-tile').forEach(btn => {
+    btn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if(!editMode) return false;
+      openGroupAdd(btn.dataset.addGroup);
+      return false;
+    };
+  });
+  document.querySelectorAll('.tile:not(.add-section-tile)').forEach(btn => {
+    btn.onclick = (e) => {
+      if(editMode || dragState){
+        e?.preventDefault();
+        e?.stopPropagation();
+        return false;
+      }
       const url = btn.dataset.url;
-      if(editMode) return;
       if(url === '#notes') return openNotes();
       openSmartUrl(url);
     };
   });
   document.querySelectorAll('.custom-tile').forEach(btn => {
-    btn.onclick = () => {
+    btn.onclick = (e) => {
+      if(dragState){
+        e?.preventDefault();
+        e?.stopPropagation();
+        return false;
+      }
       const idx = Number(btn.dataset.index);
       const item = getCustom()[idx];
       if(item && !editMode){ openSmartUrl(item.url); return; }
@@ -181,6 +277,8 @@ function openNotes(){
 
 function openCustom(index){
   currentCustomIndex = index;
+  currentAddGroup = null;
+  customDialogTitle.textContent = 'Agregar página o aplicación';
   const arr = getCustom();
   const item = arr[index] || {};
   customName.value = item.name || '';
@@ -189,50 +287,125 @@ function openCustom(index){
   deleteCustomBtn.style.visibility = item.name ? 'visible':'hidden';
   customDialog.showModal();
 }
+function openGroupAdd(groupKey){
+  currentCustomIndex = null;
+  currentAddGroup = groupKey;
+  const label = folderNames[groupKey] || ({favorites:'Favoritos y Esenciales', content:'Compras y Contenido', ai:'IA y Productividad'}[groupKey] || 'sección');
+  customDialogTitle.textContent = 'Agregar acceso en ' + label;
+  customName.value = '';
+  customUrl.value = '';
+  customIcon.value = '';
+  deleteCustomBtn.style.visibility = 'hidden';
+  customDialog.showModal();
+}
 
 customForm.addEventListener('submit', e => {
   e.preventDefault();
-  const arr = getCustom();
-  arr[currentCustomIndex] = { name: customName.value.trim(), url: normalizeUrl(customUrl.value.trim()), icon: customIcon.value.trim() };
-  setCustom(arr);
+  const name = customName.value.trim();
+  const url = normalizeUrl(customUrl.value.trim());
+  const icon = customIcon.value.trim();
+  if(currentAddGroup && groups[currentAddGroup]){
+    groups[currentAddGroup].push(app(name, url, domainFromUrl(url), false, '', icon));
+    saveGroupsState();
+  }else{
+    const arr = getCustom();
+    arr[currentCustomIndex] = { name, url, icon };
+    setCustom(arr);
+  }
+  currentAddGroup = null;
   customDialog.close();
   renderAll();
 });
-cancelCustomBtn.onclick = () => customDialog.close();
+cancelCustomBtn.onclick = () => { currentAddGroup = null; customDialog.close(); };
 deleteCustomBtn.onclick = () => {
   const arr = getCustom();
   arr.splice(currentCustomIndex,1);
   setCustom(arr);
+  currentAddGroup = null;
   customDialog.close();
   renderAll();
 };
 
 function bindDrag(){
   document.querySelectorAll('.tile[draggable="true"]').forEach(tile => {
-    tile.addEventListener('dragstart', e => e.dataTransfer.setData('text/plain', tile.dataset.id));
-    tile.addEventListener('dragover', e => { e.preventDefault(); tile.classList.add('drag-over'); });
+    tile.addEventListener('dragstart', e => {
+      dragState = { id: tile.dataset.id };
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', tile.dataset.id);
+      tile.classList.add('dragging');
+    });
+    tile.addEventListener('dragend', () => {
+      document.querySelectorAll('.drag-over,.dragging,.panel-drop').forEach(el => el.classList.remove('drag-over','dragging','panel-drop'));
+      setTimeout(() => { dragState = null; }, 80);
+    });
+    tile.addEventListener('dragover', e => {
+      if(!editMode) return;
+      e.preventDefault();
+      tile.classList.add('drag-over');
+    });
     tile.addEventListener('dragleave', () => tile.classList.remove('drag-over'));
     tile.addEventListener('drop', e => {
-      e.preventDefault(); tile.classList.remove('drag-over');
+      if(!editMode) return;
+      e.preventDefault();
+      e.stopPropagation();
+      tile.classList.remove('drag-over');
       const fromId = e.dataTransfer.getData('text/plain');
       const toId = tile.dataset.id;
-      swapItems(fromId,toId);
+      if(fromId && toId && fromId !== toId) moveItemToGroup(fromId, tile.dataset.group, toId);
+    });
+  });
+
+  document.querySelectorAll('.icon-grid,.mini-grid').forEach(grid => {
+    const groupKey = grid.dataset.group;
+    if(!groupKey) return;
+    grid.addEventListener('dragover', e => {
+      if(!editMode) return;
+      e.preventDefault();
+      grid.classList.add('panel-drop');
+    });
+    grid.addEventListener('dragleave', e => {
+      if(!grid.contains(e.relatedTarget)) grid.classList.remove('panel-drop');
+    });
+    grid.addEventListener('drop', e => {
+      if(!editMode) return;
+      if(e.target.closest('.tile')) return;
+      e.preventDefault();
+      grid.classList.remove('panel-drop');
+      const fromId = e.dataTransfer.getData('text/plain');
+      if(fromId) moveItemToGroup(fromId, groupKey, null);
     });
   });
 }
-function swapItems(fromId,toId){
-  let aK,aI,bK,bI;
+function findItemLocation(id){
   for(const [k,arr] of Object.entries(groups)){
-    arr.forEach((it,i)=>{ if(it.id===fromId){aK=k;aI=i} if(it.id===toId){bK=k;bI=i} });
+    const idx = arr.findIndex(it => it.id === id);
+    if(idx >= 0) return {group:k, index:idx};
   }
-  if(aK && bK){
-    const temp = groups[aK][aI]; groups[aK][aI] = groups[bK][bI]; groups[bK][bI] = temp; renderAll();
-  }
+  return null;
 }
+function moveItemToGroup(fromId,targetGroup,targetId=null){
+  const from = findItemLocation(fromId);
+  if(!from || !targetGroup || !groups[targetGroup]) return;
+  const item = groups[from.group].splice(from.index,1)[0];
+  let insertIndex = groups[targetGroup].length;
+  if(targetId){
+    insertIndex = groups[targetGroup].findIndex(it => it.id === targetId);
+    if(insertIndex < 0) insertIndex = groups[targetGroup].length;
+  }
+  if(from.group === targetGroup && from.index < insertIndex) insertIndex--;
+  groups[targetGroup].splice(insertIndex,0,item);
+  saveGroupsState();
+  renderAll();
+}
+function swapItems(fromId,toId){
+  const to = findItemLocation(toId);
+  if(to) moveItemToGroup(fromId, to.group, toId);
+}
+
 
 editBtn.onclick = () => { editMode = !editMode; renderAll(); };
 resetBtn.onclick = () => {
-  if(confirm('¿Restaurar accesos personalizados y recargar la maqueta?')){ localStorage.removeItem('ps_custom_tiles'); location.reload(); }
+  if(confirm('¿Restaurar accesos personalizados, orden de secciones y recargar la maqueta?')){ localStorage.removeItem('ps_custom_tiles'); localStorage.removeItem(LS_GROUPS_STATE); location.reload(); }
 };
 howBtn.onclick = () => infoDialog.showModal();
 closeInfoBtn.onclick = () => infoDialog.close();
@@ -258,26 +431,13 @@ const smartSearchDefaults = {
   comprar:'https://www.mercadolibre.com.ar/',
   comparar:'https://www.google.com/search?q=comparar+productos',
   futbol:'https://www.google.com/search?q=futbol+partidos+de+hoy',
-  dolar:'https://dolarhoy.com/',
-  clima:'https://www.google.com/search?q=clima+buenos+aires',
   tramites:'https://www.argentina.gob.ar/',
   noticias:'https://news.google.com/topstories?hl=es-419&gl=AR&ceid=AR:es-419',
-  cerca:'https://www.google.com/maps',
-  precios:'https://www.google.com/search?q=precios+argentina',
+  lugares:'https://www.google.com/maps',
   proveedores:'https://www.google.com/search?q=proveedores+mayoristas+argentina',
-  servicios:'https://www.google.com/search?q=pagar+servicios+argentina',
-  gobierno:'https://www.argentina.gob.ar/',
   soporte:'https://www.google.com/search?q=soporte+tecnico',
-  manuales:'https://www.google.com/search?q=manuales+pdf',
-  imagenes:'https://www.google.com/imghp?hl=es',
   trabajo:'https://mail.google.com/',
   redes:'https://www.google.com/search?q=redes+sociales',
-  musica:'https://open.spotify.com/',
-  aprender:'https://www.youtube.com/results?search_query=tutoriales',
-  vender:'https://www.google.com/search?q=vender+online+argentina',
-  clientes:'https://contacts.google.com/',
-  pagos:'https://www.mercadopago.com.ar/',
-  seguridad:'https://www.google.com/search?q=seguridad+digital'
 };
 const smartSearchPlaceholders = {
   google:'Buscar en la web...',
@@ -286,27 +446,13 @@ const smartSearchPlaceholders = {
   comprar:'Buscar para comprar...',
   comparar:'Comparar modelos, precios o alternativas...',
   futbol:'Buscar fútbol, partidos, resultados o tabla...',
-  dolar:'Buscar dólar, cotizaciones o economía...',
-  clima:'Buscar clima por ciudad o zona...',
   tramites:'Buscar trámites argentinos...',
   noticias:'Buscar noticias...',
-  cerca:'Buscar algo cerca de mí...',
-  precios:'Buscar precios en Argentina...',
+  lugares:'Buscar lugares, direcciones o comercios...',
   proveedores:'Buscar proveedores o mayoristas...',
-  servicios:'Buscar servicios, pagos o empresas...',
-  gobierno:'Buscar sitios del Estado...',
   soporte:'Buscar solución técnica...',
-  manuales:'Buscar manuales, drivers o PDF...',
-  imagenes:'Buscar imágenes o referencias visuales...',
   trabajo:'Buscar en herramientas de trabajo...',
-  redes:'Buscar en redes sociales...',
-  musica:'Buscar música...',
-  aprender:'Buscar tutoriales, cursos o explicaciones...',
-  vender:'Buscar dónde o cómo vender...',
-  clientes:'Buscar clientes o contactos...',
-  pagos:'Buscar pagos, billeteras o bancos...',
-  seguridad:'Buscar seguridad, cuentas o recuperación...',
-  local:'Buscar dentro de tu entorno...'
+  redes:'Buscar en redes sociales...'
 };
 function buildSmartSearchUrl(engine, query){
   const q = (query || '').trim();
@@ -317,26 +463,13 @@ function buildSmartSearchUrl(engine, query){
   if(engine === 'comprar') return `https://listado.mercadolibre.com.ar/${dash}`;
   if(engine === 'comparar') return `https://www.google.com/search?q=${encodeURIComponent('comparar ' + q + ' precio características opiniones')}`;
   if(engine === 'futbol') return `https://www.google.com/search?q=${encodeURIComponent(q + ' futbol partidos resultados fixture tabla')}`;
-  if(engine === 'dolar') return `https://www.google.com/search?q=${encodeURIComponent('dolar hoy ' + q)}`;
-  if(engine === 'clima') return `https://www.google.com/search?q=${encodeURIComponent('clima ' + q)}`;
   if(engine === 'tramites') return `https://www.google.com/search?q=${encodeURIComponent(q + ' site:argentina.gob.ar OR site:arca.gob.ar OR site:anses.gob.ar OR site:buenosaires.gob.ar')}`;
   if(engine === 'noticias') return `https://news.google.com/search?q=${e}&hl=es-419&gl=AR&ceid=AR:es-419`;
-  if(engine === 'cerca') return `https://www.google.com/maps/search/${encodeURIComponent(q + ' cerca de mi')}`;
-  if(engine === 'precios') return `https://www.google.com/search?q=${encodeURIComponent('precio ' + q + ' argentina')}`;
+  if(engine === 'lugares') return `https://www.google.com/maps/search/${encodeURIComponent(q + ' cerca de mi')}`;
   if(engine === 'proveedores') return `https://www.google.com/search?q=${encodeURIComponent('proveedor mayorista ' + q + ' argentina')}`;
-  if(engine === 'servicios') return `https://www.google.com/search?q=${encodeURIComponent(q + ' pagar servicio argentina')}`;
-  if(engine === 'gobierno') return `https://www.google.com/search?q=${encodeURIComponent(q + ' site:argentina.gob.ar OR site:gob.ar OR site:buenosaires.gob.ar')}`;
   if(engine === 'soporte') return `https://www.google.com/search?q=${encodeURIComponent('solucion soporte error ' + q)}`;
-  if(engine === 'manuales') return `https://www.google.com/search?q=${encodeURIComponent('manual pdf driver ' + q)}`;
-  if(engine === 'imagenes') return `https://www.google.com/search?tbm=isch&q=${e}`;
   if(engine === 'trabajo') return `https://mail.google.com/mail/u/0/#search/${e}`;
   if(engine === 'redes') return `https://www.google.com/search?q=${encodeURIComponent(q + ' site:instagram.com OR site:tiktok.com OR site:facebook.com OR site:x.com OR site:linkedin.com')}`;
-  if(engine === 'musica') return `https://www.youtube.com/results?search_query=${encodeURIComponent(q + ' musica')}`;
-  if(engine === 'aprender') return `https://www.youtube.com/results?search_query=${encodeURIComponent('tutorial curso aprender ' + q)}`;
-  if(engine === 'vender') return `https://www.google.com/search?q=${encodeURIComponent('vender ' + q + ' online argentina mercadolibre instagram')}`;
-  if(engine === 'clientes') return `https://contacts.google.com/search/${e}`;
-  if(engine === 'pagos') return `https://www.google.com/search?q=${encodeURIComponent('pagar ' + q + ' mercadopago banco argentina')}`;
-  if(engine === 'seguridad') return `https://www.google.com/search?q=${encodeURIComponent('seguridad recuperar cuenta clave ' + q)}`;
   if(engine === 'chatgpt') return `https://chatgpt.com/?q=${e}`;
   return `https://www.google.com/search?q=${e}`;
 }
@@ -375,4 +508,6 @@ function tick(){
   clock.textContent = now.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
   dateText.textContent = now.toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'}).replace(/^./,c=>c.toUpperCase());
 }
+restoreGroupsState();
+initDailyPhrase();
 setInterval(tick,1000); tick(); renderAll();

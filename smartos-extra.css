@@ -511,3 +511,76 @@
 @media(max-width:420px){
   .smart-engines{max-height:116px !important;}
 }
+
+
+/* Smart Search v94 — limpio y centrado estable */
+.smart-search{
+  width:min(900px, calc(100% - 32px)) !important;
+  max-width:900px !important;
+  margin-left:auto !important;
+  margin-right:auto !important;
+  box-sizing:border-box !important;
+}
+.smart-search-head{
+  display:grid !important;
+  grid-template-columns:auto 1fr !important;
+  align-items:center !important;
+}
+.smart-search-head small{
+  text-align:center !important;
+  justify-self:center !important;
+  max-width:650px !important;
+}
+.smart-engines{
+  justify-content:center !important;
+}
+@media(max-width:920px){
+  .smart-search{width:100% !important; max-width:100% !important;}
+  .smart-search-head{grid-template-columns:1fr !important; justify-items:center !important;}
+  .smart-search-head small{text-align:center !important;}
+}
+
+
+/* v96 — frase diaria y agregar accesos por sección */
+.daily-phrase{
+  width:min(900px, calc(100% - 32px));
+  margin:-8px auto 22px;
+  text-align:center;
+  color:#eaf3ff;
+  font-size:20px;
+  line-height:1.35;
+  font-weight:500;
+  letter-spacing:.15px;
+  opacity:.92;
+  text-shadow:0 10px 28px rgba(0,0,0,.45);
+}
+.add-section-tile{
+  opacity:.9;
+  border:1px dashed rgba(120,190,255,.45) !important;
+  border-radius:18px;
+  background:rgba(30,135,255,.08) !important;
+}
+.add-section-tile:hover{
+  opacity:1;
+  border-color:rgba(30,220,255,.85) !important;
+  background:rgba(30,135,255,.14) !important;
+}
+.add-section-tile .add-icon{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#cfefff;
+  font-size:34px;
+  font-weight:800;
+  border:1px solid rgba(120,210,255,.34);
+  background:linear-gradient(180deg,rgba(18,69,110,.82),rgba(9,25,52,.82));
+}
+.editing-mode .panel-drop{
+  outline:2px dashed rgba(34,207,255,.42);
+  outline-offset:8px;
+  border-radius:18px;
+}
+@media(max-width:620px){
+  .daily-phrase{font-size:15px;margin:-2px auto 14px;width:calc(100% - 16px);}
+  .add-section-tile .add-icon{font-size:28px;}
+}
